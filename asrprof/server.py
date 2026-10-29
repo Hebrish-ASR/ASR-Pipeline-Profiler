@@ -3,7 +3,7 @@
     asrprof serve --host 0.0.0.0 --port 8765
 
     GET  /health                       {"ok": true, "version": ...}
-    GET  /pipelines                    pipeline files in pipelines/
+    GET  /pipelines                    bundled and ~/.config/asrprof/pipelines files
     GET  /samples                      reading samples (id, title, text)
     POST /runs?pipeline=hebrish-desktop&mode=batch&sample=read-60s&repeat=2&var=asr.threads=8
          body: the audio file (any format ffmpeg reads)
@@ -31,11 +31,8 @@ from urllib.parse import parse_qs, urlparse
 
 from . import __version__
 from . import samples as samplesmod
-from .cli import DATA
+from .paths import REPORTS, child_env, pipelines
 
-ROOT = Path(__file__).resolve().parent.parent
-PIPELINES = ROOT / "pipelines"
-REPORTS = DATA / "reports"
 _one = threading.Lock()
 
 
@@ -55,7 +52,7 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/health":
             return self._json(200, {"ok": True, "version": __version__})
         if u.path == "/pipelines":
-            return self._json(200, [{"name": p.stem, "file": str(p)} for p in sorted(PIPELINES.glob("*.toml"))])
+            return self._json(200, [{"name": n, "file": str(p)} for n, p in pipelines().items()])
         if u.path == "/samples":
             return self._json(200, [{k: s.get(k) for k in ("id", "title", "target_seconds", "paragraphs", "words", "text")}
                                     for s in samplesmod.all_samples()])
@@ -74,8 +71,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": "not found"})
         q = parse_qs(u.query)
         name = q.get("pipeline", [""])[0]
-        pipe = PIPELINES / f"{Path(name).name}.toml"
-        if not pipe.is_file():
+        pipe = pipelines().get(name)
+        if not pipe:
             return self._json(400, {"error": f"no pipeline {name!r}"})
         n = int(self.headers.get("Content-Length", 0))
         if not n:
@@ -93,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
                     args += [f"--{key}", q[key][0]]
             for v in q.get("var", []):
                 args += ["--var", v]
-            env = dict(os.environ, PYTHONPATH=str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""))
+            env = child_env()
             with _one:
                 p = subprocess.run(args, capture_output=True, text=True, env=env)
             if p.returncode:
@@ -103,5 +100,5 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(host: str, port: int):
     srv = ThreadingHTTPServer((host, port), Handler)
-    print(f"asrprof {__version__} on http://{host}:{port}  (pipelines: {PIPELINES})")
+    print(f"asrprof {__version__} on http://{host}:{port}  (pipelines: {', '.join(pipelines())})")
     srv.serve_forever()

@@ -10,24 +10,29 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QToolTip, QWidget
 
-PALETTE = ["#2f7fd1", "#d1772f", "#3aa35b", "#9a4fc4", "#c43f5d", "#2fa7a3", "#8a8a2f"]
-GLUE = QColor("#9aa0a6")
-JUNCTION = QColor("#e0282e")
-CPU = QColor("#2f7fd1")
-GPU = QColor("#3aa35b")
+from . import style
 
-LANE_H, LANE_GAP, LEFT, TOP, PLOT_H = 26, 6, 110, 24, 90
+LANE_H, LANE_GAP, LEFT, TOP = 28, 8, 116, 30
+
+
+def _colours():
+    t = style.theme
+    c = t.c if t else style.LIGHT
+    stages = t.stages if t else style.STAGES_LIGHT
+    return c, stages
 
 
 class Timeline(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMouseTracking(True)
-        self.setMinimumHeight(360)
+        self.setMinimumHeight(420)
         self.rep = None
         self.run = 0
         self.show_load = False
         self.t0, self.t1 = 0.0, 1.0
+        self.origin = 0.0
+        self.plot_h = 96
         self._drag = None
         self._hits: list[tuple[QRectF, str]] = []
 
@@ -50,6 +55,9 @@ class Timeline(QWidget):
 
     def reset_view(self):
         a, b = self._extent()
+        # the axis counts from the start of the run (or of the profile, with the load phase shown)
+        self.origin = 0.0 if self.show_load or not self.rep else next(
+            (s["t0_ms"] for s in self.rep["spans"] if s["kind"] == "run" and s["run"] == self.run), a)
         pad = (b - a) * 0.01 or 1
         self.t0, self.t1 = a - pad, b + pad
         self.update()
@@ -68,30 +76,47 @@ class Timeline(QWidget):
     def paintEvent(self, ev):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), self.palette().base())
+        pal, stage_cols = _colours()
+        p.fillRect(self.rect(), QColor(pal["surface"]))
         self._hits = []
         if not self.rep:
-            p.drawText(self.rect(), Qt.AlignCenter, "Run a profile or open a report")
+            p.setPen(QColor(pal["muted"]))
+            p.drawText(self.rect(), Qt.AlignCenter, "The timeline of a run appears here.\n"
+                       "Lanes per stage, model calls in colour, glue in grey, junctions in red,\n"
+                       "with CPU and GPU underneath on the same clock.")
             return
-        fg = self.palette().text().color()
+        fg = QColor(pal["ink"])
+        self.GLUE, self.JUNCTION = QColor(pal["glue"]), QColor(pal["junction"])
+        self.grid = QColor(pal["grid"])
+        self.muted = QColor(pal["muted"])
         small = QFont(self.font())
         small.setPointSizeF(max(7.0, self.font().pointSizeF() * 0.85))
         stages = self.stages() + ["pipeline"]
         spans = self._spans()
         lanes = {name: TOP + i * (LANE_H + LANE_GAP) for i, name in enumerate(stages)}
         jy = TOP + len(stages) * (LANE_H + LANE_GAP)
-        cpu_y = jy + LANE_H + 28
-        gpu_y = cpu_y + PLOT_H + 28
+        has_gpu = any("gpu" in s for s in self.rep["samples"])
+        free = self.height() - (jy + LANE_H + 30) - 60
+        self.plot_h = PLOT_H = max(80, min(220, free / (2 if has_gpu else 1) - (26 if has_gpu else 0)))
+        cpu_y = jy + LANE_H + 30
+        gpu_y = cpu_y + PLOT_H + 26
         self._axis(p, fg, small)
 
-        p.setFont(small)
+        colour = {n: QColor(stage_cols[i % len(stage_cols)]) for i, n in enumerate(stages)}
+        colour["pipeline"] = QColor(pal["muted"])
+        bold = QFont(small)
+        bold.setBold(True)
         for i, name in enumerate(stages):
             y = lanes[name]
+            p.setPen(Qt.NoPen)
+            p.setBrush(colour[name])
+            p.drawEllipse(QRectF(10, y + LANE_H / 2 - 4, 8, 8))
+            p.setFont(bold)
             p.setPen(fg)
-            p.drawText(QRectF(4, y, LEFT - 10, LANE_H), Qt.AlignVCenter | Qt.AlignRight, name)
-        p.drawText(QRectF(4, jy, LEFT - 10, LANE_H), Qt.AlignVCenter | Qt.AlignRight, "junctions")
-
-        colour = {n: QColor(PALETTE[i % len(PALETTE)]) for i, n in enumerate(stages)}
+            p.drawText(QRectF(22, y, LEFT - 30, LANE_H), Qt.AlignVCenter | Qt.AlignLeft, name)
+        p.setPen(QColor(pal["junction"]))
+        p.drawText(QRectF(22, jy, LEFT - 30, LANE_H), Qt.AlignVCenter | Qt.AlignLeft, "junctions")
+        p.setFont(small)
         order = {"stage": 0, "load": 0, "run": 0, "glue": 1, "infer": 2}
         for s in sorted(spans, key=lambda s: order.get(s["kind"], 3)):
             if s["stage"] not in lanes:
@@ -103,18 +128,22 @@ class Timeline(QWidget):
             y = lanes[s["stage"]]
             c = QColor(colour[s["stage"]])
             if s["kind"] in ("stage", "run", "load"):
-                c.setAlpha(55 if s["kind"] != "load" else 35)
+                c.setAlpha(40 if s["kind"] != "load" else 28)
                 r = QRectF(x0, y, max(1.0, x1 - x0), LANE_H)
             elif s["kind"] == "glue":
-                c = GLUE
-                r = QRectF(x0, y + LANE_H * 0.55, max(1.0, x1 - x0), LANE_H * 0.45)
+                c = self.GLUE
+                r = QRectF(x0, y + LANE_H * 0.62, max(1.0, x1 - x0), LANE_H * 0.3)
             else:
-                r = QRectF(x0, y + 3, max(1.0, x1 - x0), LANE_H * 0.5)
-            p.fillRect(r, c)
+                r = QRectF(x0, y + 4, max(1.0, x1 - x0), LANE_H * 0.52)
+            p.setPen(Qt.NoPen)
+            p.setBrush(c)
+            rad = min(4.0, r.width() / 2, r.height() / 2)
+            p.drawRoundedRect(r, rad, rad)
             if s["kind"] in ("infer", "glue", "load") and r.width() > 60:
-                p.setPen(Qt.white if s["kind"] == "infer" else fg)
-                p.drawText(r.adjusted(3, 0, -2, 0), Qt.AlignVCenter | Qt.AlignLeft,
-                           f'{s["name"]} {s["ms"]:.1f} ms')
+                p.setPen(QColor("#ffffff") if s["kind"] == "infer" and not (style.theme and style.theme.dark)
+                         else QColor("#0c1412") if s["kind"] == "infer" else fg)
+                txt = p.fontMetrics().elidedText(f'{s["name"]} {s["ms"]:.1f} ms', Qt.ElideRight, int(r.width() - 8))
+                p.drawText(r.adjusted(4, 0, -2, 0), Qt.AlignVCenter | Qt.AlignLeft, txt)
             meta = ", ".join(f"{k}={v}" for k, v in s.get("meta", {}).items())
             cores = s["cpu_ms"] / s["ms"] if s["ms"] else 0
             self._hits.append((r, f'<b>{s["stage"]} · {s["name"]}</b> ({s["kind"]}, {s["phase"]})<br>'
@@ -129,23 +158,45 @@ class Timeline(QWidget):
                     x0, x1 = self.x(a), self.x(b)
                     if x1 < LEFT or x0 > self.width():
                         continue
-                    r = QRectF(max(x0, LEFT), jy + 4, max(2.0, x1 - x0), LANE_H - 8)
-                    p.fillRect(r, JUNCTION)
+                    r = QRectF(max(x0, LEFT), jy + 3, max(3.0, x1 - x0), LANE_H - 12)
+                    p.setPen(Qt.NoPen)
+                    p.setBrush(self.JUNCTION)
+                    p.drawRoundedRect(r, 1.5, 1.5)
                     p.setPen(fg)
                     lbl = f"{b - a:.2f} ms" if b - a < 10 else f"{b - a:.0f} ms"
                     if r.center().x() - 30 > last_label:          # skip labels that would overlap
-                        p.drawText(QRectF(r.center().x() - 40, jy + LANE_H - 2, 80, 14), Qt.AlignCenter, lbl)
+                        p.drawText(QRectF(r.center().x() - 40, jy + LANE_H - 9, 80, 14), Qt.AlignCenter, lbl)
                         last_label = r.center().x() + 30
                     glue = "<br>".join(f"{k}: {v:.3f} ms" for k, v in j["glue_ms"].items())
                     self._hits.append((r.adjusted(-3, -3, 3, 3),
                                        f'<b>junction {j["junction"]}</b><br>{b - a:.3f} ms<br>{glue}'
                                        f'<br>unaccounted (all {j["count"]}): {j["unaccounted_ms"]:.3f} ms'))
 
-        self._plot(p, fg, small, cpu_y, "cpu", "CPU cores", self.rep["host"]["cores"] or 1, CPU)
-        if any("gpu" in s for s in self.rep["samples"]):
+        self._plot(p, fg, small, cpu_y, "cpu", "CPU cores", self.rep["host"]["cores"] or 1, QColor(pal["accent"]))
+        bottom = cpu_y + PLOT_H
+        if has_gpu:
             g = self.rep["host"].get("gpu") or {}
-            self._plot(p, fg, small, gpu_y, "gpu", "GPU busy %" + ("" if g.get("attributable") else " (device)"),
-                       100, GPU)
+            self._plot(p, fg, small, gpu_y, "gpu", "GPU busy %" + ("" if g.get("attributable") else "\n(whole device)"),
+                       100, QColor(pal["gold"]))
+            bottom = gpu_y + PLOT_H
+        self._legend(p, small, bottom + 22, colour, stages)
+
+    def _legend(self, p, font, y, colour, stages):
+        p.setFont(font)
+        x = LEFT
+        first = QColor(colour[stages[0]]) if stages else self.muted
+        soft = QColor(first)
+        soft.setAlpha(40)
+        items = [("model call", first, 0.52), ("glue", self.GLUE, 0.3), ("stage turn", soft, 1.0),
+                 ("junction", self.JUNCTION, 0.52)]
+        for label, col, h in items:
+            p.setPen(Qt.NoPen)
+            p.setBrush(col)
+            p.drawRoundedRect(QRectF(x, y + (14 - 14 * h) / 2, 22, 14 * h), 2, 2)
+            p.setPen(self.muted)
+            p.drawText(QPointF(x + 28, y + 11), label)
+            x += 28 + p.fontMetrics().horizontalAdvance(label) + 22
+        p.drawText(QPointF(x + 10, y + 11), "Scroll to zoom · drag to pan · double-click to fit · hover for details")
 
     def _axis(self, p, fg, font):
         p.setFont(font)
@@ -155,25 +206,38 @@ class Timeline(QWidget):
             if span / (step * m) <= 10:
                 step *= m
                 break
-        t = (self.t0 // step) * step
-        pen = QPen(self.palette().mid().color())
+        t = self.origin + ((self.t0 - self.origin) // step) * step
+        pen = QPen(self.grid)
         while t <= self.t1:
             x = self.x(t)
-            if x >= LEFT:
+            if LEFT <= x <= self.width() - 12:
                 p.setPen(pen)
                 p.drawLine(QPointF(x, TOP - 4), QPointF(x, self.height()))
-                p.setPen(fg)
-                lbl = f"{t / 1000:.2f} s" if step >= 100 else f"{t:.1f} ms"
-                p.drawText(QPointF(x + 2, 12), lbl)
+                p.setPen(self.muted)
+                rel = t - self.origin
+                if abs(rel) < step / 1000:
+                    rel = 0.0
+                lbl = f"{rel / 1000:.2f} s" if step >= 100 else f"{rel:.1f} ms"
+                if x + 3 + p.fontMetrics().horizontalAdvance(lbl) < self.width() - 12:
+                    p.drawText(QPointF(x + 3, 16), lbl)
             t += step
 
     def _plot(self, p, fg, font, y, key, label, ymax, colour):
+        PLOT_H = self.plot_h
         p.setPen(fg)
-        p.drawText(QRectF(4, y, LEFT - 10, 30), Qt.AlignTop | Qt.AlignRight | Qt.TextWordWrap, label)
+        f = QFont(font)
+        f.setBold(True)
+        p.setFont(f)
+        p.drawText(QRectF(10, y, LEFT - 18, 34), Qt.AlignTop | Qt.AlignLeft | Qt.TextWordWrap, label)
+        p.setFont(font)
+        p.setPen(self.muted)
         p.drawText(QRectF(4, y + PLOT_H - 14, LEFT - 10, 14), Qt.AlignRight, "0")
-        p.drawText(QRectF(4, y + 30, LEFT - 10, 14), Qt.AlignRight, f"top {ymax}")
-        p.setPen(QPen(self.palette().mid().color()))
-        p.drawRect(QRectF(LEFT, y, self.width() - LEFT - 12, PLOT_H))
+        p.drawText(QRectF(4, y - 2, LEFT - 10, 14), Qt.AlignRight, f"{ymax}")
+        box = QRectF(LEFT, y, self.width() - LEFT - 12, PLOT_H)
+        p.setPen(QPen(self.grid))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(box, 4, 4)
+        p.drawLine(QPointF(LEFT, y + PLOT_H / 2), QPointF(box.right(), y + PLOT_H / 2))
         path = QPainterPath()
         started = False
         for s in self.rep["samples"]:
@@ -189,7 +253,18 @@ class Timeline(QWidget):
                 started = True
             else:
                 path.lineTo(x, yy)
-        p.setPen(QPen(colour, 1.4))
+        if started:
+            area = QPainterPath(path)
+            area.lineTo(path.currentPosition().x(), y + PLOT_H)
+            area.lineTo(path.elementAt(0).x, y + PLOT_H)
+            area.closeSubpath()
+            fill = QColor(colour)
+            fill.setAlpha(45)
+            p.setPen(Qt.NoPen)
+            p.setBrush(fill)
+            p.drawPath(area)
+        p.setPen(QPen(colour, 1.6))
+        p.setBrush(Qt.NoBrush)
         p.drawPath(path)
 
     # interaction -----------------------------------------------------------------------------

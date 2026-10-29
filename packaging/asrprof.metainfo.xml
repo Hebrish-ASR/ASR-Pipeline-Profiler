@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.hebrish.AsrProf</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>ASR Pipeline Profiler</name>
+  <summary>Per-stage CPU, GPU, memory and junctions for local speech pipelines</summary>
+  <developer id="app.hebrish"><name>Daniel Rosehill</name></developer>
+  <description>
+    <p>Profiles a multi-model local speech-to-text pipeline (voice activity detection, ASR,
+    paragraph or punctuation models, post-processing) as a whole: how long each model call
+    takes, how much CPU and how many threads each stage really uses, memory per model, GPU use,
+    and the junctions, the gaps between one stage finishing and the next starting.</p>
+    <p>Read a built-in sample aloud or open a recording, run it in batch or real-time replay,
+    and read the result as a timeline and tables. Also a command-line tool and an HTTP server.</p>
+  </description>
+  <launchable type="desktop-id">asrprof.desktop</launchable>
+  <url type="homepage">https://github.com/Hebrish-ASR/ASR-Pipeline-Profiler</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/Hebrish-ASR/ASR-Pipeline-Profiler/main/docs/img/timeline-batch.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <releases>
+@RELEASES@
+  </releases>
+</component>

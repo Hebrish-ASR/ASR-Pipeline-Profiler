@@ -47,7 +47,9 @@ class Samples:
         for a, b in zip(raw, raw[1:]):
             dt = b["t"] - a["t"]
             if dt > 0:
-                self.iv.append((a["t"], b["t"], (b["cpu"] - a["cpu"]) / dt, b["thr"], b["rss"], b.get("gpu")))
+                # summed from per-thread deltas, not the difference of process totals: a thread that
+                # exits takes its CPU time out of the total and would make the interval negative
+                self.iv.append((a["t"], b["t"], sum(b["thr"].values()) / dt, b["thr"], b["rss"], b.get("gpu")))
 
     def within(self, windows: list[tuple[int, int]]):
         """Intervals whose midpoint falls in any window."""

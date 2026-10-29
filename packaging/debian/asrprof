@@ -1,0 +1,4 @@
+#!/bin/sh
+# System python3 (PySide6, numpy, sounddevice from apt) + the bundled sherpa-onnx and onnxruntime.
+export PYTHONPATH=/usr/lib/asrprof${PYTHONPATH:+:$PYTHONPATH}
+exec /usr/bin/python3 -m asrprof "$@"

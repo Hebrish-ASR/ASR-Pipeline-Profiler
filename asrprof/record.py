@@ -10,8 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from . import samples as samplesmod
-
-RECORDINGS = Path.home() / ".local" / "share" / "asrprof" / "recordings"
+from .paths import RECORDINGS
 
 
 def new_path(sample_id: str) -> Path:

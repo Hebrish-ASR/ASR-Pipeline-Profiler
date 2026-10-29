@@ -37,20 +37,36 @@ Concepts and measurement method in detail: [docs/concepts.md](docs/concepts.md).
 
 ## Install (Ubuntu)
 
+**From the .deb** (amd64, Ubuntu with Python 3.14, e.g. 26.04):
+
 ```bash
-git clone https://github.com/Hebrish-ASR/ASR-Pipeline-Profiler
-cd ASR-Pipeline-Profiler
-sudo apt install python3-pyside6.qtwidgets ffmpeg libportaudio2   # GUI, audio decoding, recording
-uv venv --system-site-packages --python /usr/bin/python3   # the distro Python, so the venv sees apt's PySide6
-uv pip install -e '.[hebrish,test]'   # the Hebrish example's runtimes too
+git clone https://github.com/Hebrish-ASR/ASR-Pipeline-Profiler && cd ASR-Pipeline-Profiler
+./build-deb.sh                                   # -> dist/asrprof_<version>-1_amd64.deb
+sudo apt install ./dist/asrprof_*_amd64.deb
 ```
 
-Run it from the checkout: the pipeline files (`pipelines/`) and reading samples (`samples/`) live
-there, not in the package. Linux only for now; the sampler reads `/proc`.
+That gives **ASR Pipeline Profiler** in the application menu, `asrprof` on the path, and
+sherpa-onnx and ONNX Runtime bundled in `/usr/lib/asrprof` for the Hebrish example; PySide6,
+NumPy and sounddevice come from apt. `build-deb.sh` needs `uv`; if `/tmp` is short of space it
+builds under `build/` (or set `TMPDIR`).
+
+**From a checkout** (for development):
+
+```bash
+sudo apt install python3-pyside6.qtwidgets qt6-svg-plugins ffmpeg libportaudio2
+uv venv --system-site-packages --python /usr/bin/python3   # the distro Python, so the venv sees apt's PySide6
+uv pip install -e '.[hebrish,test]'
+.venv/bin/asrprof gui
+```
+
+Bundled pipelines and reading samples live in the package (`asrprof/data/`); add your own to
+`~/.config/asrprof/pipelines/` and `~/.config/asrprof/samples/`, and refer to a pipeline by name
+(`asrprof pipelines` lists them) or by path. Linux only for now; the sampler reads `/proc`.
 
 ## Use
 
-**GUI.** `.venv/bin/asrprof gui`. Pick a pipeline, edit its variables (model paths, threads,
+**GUI.** *ASR Pipeline Profiler* in the menu, or `asrprof gui [report.json]`. It follows the
+desktop's light or dark theme. Pick a pipeline, edit its variables (model paths, threads,
 provider), pick a reading sample and record yourself reading it (or open any recording), choose
 batch or replay, and run. The profile runs in a child process, so the GUI's own CPU never shows
 up in the numbers. Tabs: Timeline, Stages, Junctions, Replay latency, Output, Summary.
@@ -58,10 +74,11 @@ up in the numbers. Tabs: Timeline, Stages, Junctions, Replay latency, Output, Su
 **CLI.**
 
 ```bash
+asrprof pipelines                     # the pipelines known by name
 asrprof samples                       # the reading samples: ~30 s, ~60 s, ~120 s, with paragraphs
 asrprof record read-60s               # read one aloud into the default microphone
-asrprof run pipelines/hebrish-desktop.toml --audio take.wav --sample read-60s --repeat 3
-asrprof run pipelines/hebrish-desktop.toml --audio take.wav --mode replay --var asr.threads=8
+asrprof run hebrish-desktop --audio take.wav --sample read-60s --repeat 3
+asrprof run hebrish-desktop --audio take.wav --mode replay --var asr.threads=8
 asrprof show report.json
 ```
 
@@ -75,22 +92,28 @@ report, for profiling on a server or from a benchmarking agent on another machin
 
 ## The Hebrish example
 
-`pipelines/hebrish-desktop.toml` is the desktop app's Transcription Mode. The adapters import
+`hebrish-desktop` is the desktop app's Transcription Mode. The adapters import
 the app's own `hebrish` package (set `HEBRISH_SRC` to a checkout's `desktop/` folder, or install
-the .deb) and call its functions one step at a time, so the spans follow the app's real code path.
+the Hebrish .deb, which it then finds by itself) and call its functions one step at a time, so the spans follow the app's real code path.
 Models are read from the app's model folder (`~/.local/share/hebrish/models`).
 
 ```bash
-HEBRISH_SRC=~/src/Hebrish-App/desktop asrprof run pipelines/hebrish-desktop.toml \
+HEBRISH_SRC=~/src/Hebrish-App/desktop asrprof run hebrish-desktop \
     --audio take.wav --sample read-60s --repeat 2
 ```
 
 The first measurements, and what they show, are in
 [docs/findings/2026-10-29-hebrish-desktop.md](docs/findings/2026-10-29-hebrish-desktop.md).
 
+| | |
+| --- | --- |
+| ![Stages](docs/img/stages.png) | ![Junctions](docs/img/junctions.png) |
+| ![Replay timeline](docs/img/timeline-replay.png) | ![Replay latency](docs/img/replay-latency.png) |
+| ![Read aloud: the sample in large type while recording](docs/img/start.png) | ![Dark theme](docs/img/timeline-dark.png) |
+
 ## Your own pipeline
 
-Copy `pipelines/hebrish-desktop.toml`, then point each stage at an adapter. For a text stage
+Copy `asrprof/data/pipelines/hebrish-desktop.toml` to `~/.config/asrprof/pipelines/<name>.toml`, then point each stage at an adapter. For a text stage
 that is just a function, the builtin `python` adapter is enough (`callable = "pkg.mod:fn"`).
 Otherwise write a small class: [docs/adapters.md](docs/adapters.md). The adapter decides which
 code counts as a model call and which as glue, and that split is what makes junctions

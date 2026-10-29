@@ -1,6 +1,6 @@
 # Hebrish desktop pipeline: first profile (2026-10-29)
 
-**Setup.** `pipelines/hebrish-desktop.toml` as shipped: Silero VAD (1 thread) → Sabich v2.2
+**Setup.** `hebrish-desktop` (`asrprof/data/pipelines/hebrish-desktop.toml`) as shipped: Silero VAD (1 thread) → Sabich v2.2
 (Parakeet TDT 0.6B int8, sherpa-onnx, 4 threads, CPU) → Paragraph model r5b (ONNX Runtime,
 default threads). Hebrish desktop source at its 1.011 release. Laptop: AMD Ryzen 7 5700U
 (8 cores / 16 threads), Radeon iGPU (amdgpu sysfs telemetry), Ubuntu, Python 3.14,
@@ -14,8 +14,8 @@ batch). A human recording of each sample is still to be done.
 Commands:
 
 ```bash
-asrprof run pipelines/hebrish-desktop.toml --audio read-120s-tts.wav --sample read-120s --repeat 3
-asrprof run pipelines/hebrish-desktop.toml --audio read-120s-tts.wav --sample read-120s --mode replay
+asrprof run hebrish-desktop --audio read-120s-tts.wav --sample read-120s --repeat 3
+asrprof run hebrish-desktop --audio read-120s-tts.wav --sample read-120s --mode replay
 ```
 
 ## Load

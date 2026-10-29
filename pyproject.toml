@@ -28,3 +28,6 @@ version = {attr = "asrprof.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["asrprof*"]
+
+[tool.setuptools.package-data]
+asrprof = ["data/pipelines/*.toml", "data/samples/*.md", "data/fonts/*", "data/icons/*.svg"]

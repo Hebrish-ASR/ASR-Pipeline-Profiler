@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=ASR Pipeline Profiler
+GenericName=Speech pipeline profiler
+Comment=See where the time and compute go in a multi-model local speech-to-text pipeline
+Exec=asrprof-gui %f
+Icon=asrprof
+Terminal=false
+Categories=Development;Profiling;
+Keywords=asr;speech;profiler;benchmark;vad;whisper;parakeet;onnx;latency;junctions;
+MimeType=application/json;
+StartupNotify=true
+StartupWMClass=asrprof

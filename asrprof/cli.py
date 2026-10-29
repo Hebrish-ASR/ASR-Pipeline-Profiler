@@ -1,6 +1,7 @@
 """asrprof: profile a multi-model local ASR pipeline.
 
-    asrprof run PIPELINE.toml --audio take.wav [--sample read-60s] [--mode batch|replay]
+    asrprof pipelines                 the pipelines known by name (bundled + ~/.config/asrprof/pipelines)
+    asrprof run PIPELINE --audio take.wav [--sample read-60s] [--mode batch|replay]
                 [--var key=value ...] [--repeat N] [--out report.json] [--json]
     asrprof show report.json          the text summary of a saved report
     asrprof samples [ID]              list the reading samples, or print one to read aloud
@@ -22,7 +23,7 @@ from pathlib import Path
 
 from . import samples as samplesmod
 
-DATA = Path.home() / ".local" / "share" / "asrprof"
+from .paths import DATA, REPORTS, pipelines, resolve_pipeline
 
 
 def _fmt(v, unit="", nd=1):
@@ -93,14 +94,14 @@ def summary_text(rep: dict) -> str:
 
 def default_out(rep: dict) -> Path:
     stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    return DATA / "reports" / f"{stamp}_{rep['pipeline']['name']}_{rep['mode']}.json"
+    return REPORTS / f"{stamp}_{rep['pipeline']['name']}_{rep['mode']}.json"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="asrprof", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="profile a pipeline on one recording")
-    r.add_argument("pipeline")
+    r.add_argument("pipeline", help="a pipeline name (asrprof pipelines) or a .toml file")
     r.add_argument("--audio", required=True)
     r.add_argument("--sample", help="reading sample id (or .md path) the audio reads; enables quality checks")
     r.add_argument("--mode", choices=["batch", "replay"], default="batch")
@@ -111,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--speed", type=float, default=1.0, help="replay speed (1.0 = real time)")
     r.add_argument("--out", help="report path (default ~/.local/share/asrprof/reports/...)")
     r.add_argument("--json", action="store_true", help="print the report JSON to stdout")
+    sub.add_parser("pipelines", help="list the pipelines asrprof knows by name")
     s = sub.add_parser("show", help="print the summary of a saved report")
     s.add_argument("report")
     sm = sub.add_parser("samples", help="list reading samples or print one")
@@ -128,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "run":
         from .profile import run_profile
         log = (lambda m: print(m, file=sys.stderr)) if a.json else print
-        rep = run_profile(a.pipeline, a.audio, a.mode, a.var, a.sample, a.repeat, a.interval,
+        rep = run_profile(str(resolve_pipeline(a.pipeline)), a.audio, a.mode, a.var, a.sample, a.repeat, a.interval,
                           a.chunk_ms, a.speed, log=log)
         out = Path(a.out) if a.out else default_out(rep)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -139,6 +141,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(summary_text(rep))
             print(f"\nreport: {out}")
+        return 0
+    if a.cmd == "pipelines":
+        for n, p in pipelines().items():
+            print(f"{n:24} {p}")
         return 0
     if a.cmd == "show":
         print(summary_text(json.loads(Path(a.report).read_text())))

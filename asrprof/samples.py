@@ -1,11 +1,12 @@
-"""Reading samples: `samples/<id>.md`, YAML-ish front matter then the text to read, with blank
-lines between paragraphs (the reference for paragraph checks)."""
+"""Reading samples: `asrprof/data/samples/<id>.md` and `~/.config/asrprof/samples/<id>.md`.
+YAML-ish front matter, then the text to read with blank lines between paragraphs (the reference
+for paragraph checks)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent / "samples"
+from .paths import sample_dirs
 
 
 def _parse(path: Path) -> dict:
@@ -23,8 +24,13 @@ def _parse(path: Path) -> dict:
     return meta
 
 
-def all_samples(root: Path = ROOT) -> list[dict]:
-    return sorted((_parse(p) for p in root.glob("*.md")), key=lambda s: int(s.get("target_seconds", 0)))
+def all_samples() -> list[dict]:
+    seen: dict[str, dict] = {}
+    for d in reversed(sample_dirs()):            # user samples override bundled ones by id
+        for p in d.glob("*.md"):
+            s = _parse(p)
+            seen[s["id"]] = s
+    return sorted(seen.values(), key=lambda s: int(s.get("target_seconds", 0)))
 
 
 def get(sample: str) -> dict:

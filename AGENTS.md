@@ -9,7 +9,8 @@ write everything for a stranger; no machine names, account ids or credentials.
 - Layout: `asrprof/trace.py` (spans), `sampler.py` (separate-process /proc + GPU sampler),
   `gpu.py`, `pipeline.py` (TOML, audio, batch/replay), `report.py` (stage resources, junctions,
   replay latency), `quality.py`, `profile.py` (one profile end to end), `cli.py`, `server.py`,
-  `gui/` (PySide6), `adapters/` (role base classes, Hebrish adapters, `python` text adapter).
+  `paths.py` (bundled vs `~/.config/asrprof` pipelines and samples, data dirs), `gui/` (PySide6;
+  `style.py` is the Hebrish brand palette, light and dark), `data/` (pipelines, samples, icon, font), `adapters/` (role base classes, Hebrish adapters, `python` text adapter).
 - Setup: `uv venv --system-site-packages --python /usr/bin/python3 && uv pip install -e '.[hebrish,test]'`.
   Tests (no models): `.venv/bin/python -m pytest -q tests`.
 - The Hebrish adapters must follow the app's code (Hebrish-ASR/Hebrish-App `desktop/hebrish/`
@@ -20,4 +21,8 @@ write everything for a stranger; no machine names, account ids or credentials.
 - Findings from real runs go in `docs/findings/YYYY-MM-DD-<pipeline>.md`: setup with versions,
   input (say if it is synthetic), commands, numbers, and each conclusion marked measured or
   inferred.
+- Package: `./build-deb.sh` -> `dist/asrprof_<version>-1_amd64.deb` (bundles sherpa-onnx and
+  onnxruntime in `/usr/lib/asrprof`, everything else from apt; pinned to the build's python3
+  minor). Temp files go under `build/` because `/tmp` can be short of quota. Check an installed
+  copy with `asrprof pipelines` and a short `asrprof run`.
 - Releases: small-project tier, tags `v1.0`, `v1.1`, … (`asrprof.__version__` matches). None cut yet.

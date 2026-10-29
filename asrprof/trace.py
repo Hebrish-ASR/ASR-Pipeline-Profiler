@@ -70,8 +70,8 @@ class Tracer:
             fd, path = tempfile.mkstemp(prefix="asrprof-", suffix=".jsonl")
             os.close(fd)
             self._sample_file = Path(path)
-            pkg_root = str(Path(__file__).resolve().parent.parent)
-            env = dict(os.environ, PYTHONPATH=pkg_root + os.pathsep + os.environ.get("PYTHONPATH", ""))
+            from .paths import child_env
+            env = child_env()
             self._sampler = subprocess.Popen(
                 [sys.executable, "-m", "asrprof.sampler", str(os.getpid()), str(self.interval_ms), path],
                 env=env, stdin=subprocess.DEVNULL)
