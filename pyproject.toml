@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asrprof"
+dynamic = ["version"]
+description = "Profile multi-model local ASR pipelines: per-stage CPU, GPU and memory, and the junctions between stages"
+authors = [{name = "Daniel Rosehill"}]
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+# On Ubuntu, PySide6 can come from apt (python3-pyside6.*) with a --system-site-packages venv.
+gui = ["PySide6-Essentials>=6.6"]
+record = ["sounddevice>=0.4"]
+hebrish = ["sherpa-onnx>=1.12", "onnxruntime>=1.17", "sounddevice>=0.4"]
+nvidia = ["nvidia-ml-py"]
+test = ["pytest"]
+
+[project.scripts]
+asrprof = "asrprof.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "asrprof.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["asrprof*"]

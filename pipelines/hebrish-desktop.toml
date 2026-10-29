@@ -1,0 +1,42 @@
+# The Hebrish desktop app's Transcription Mode pipeline (Hebrish-ASR/Hebrish-App, desktop/):
+# Silero VAD -> Parakeet TDT (Sabich) via sherpa-onnx -> the Paragraph model (ONNX Runtime).
+# Paths are the app's defaults on Linux; override with --var, e.g.
+#   --var hebrish_src=~/src/Hebrish-App/desktop --var asr.threads=8
+name = "hebrish-desktop"
+description = "Hebrish desktop Transcription Mode: Silero VAD, Sabich (Parakeet TDT 0.6B int8), Paragraph model"
+
+[vars]
+hebrish_src = "${env:HEBRISH_SRC}"          # empty: import hebrish, else /usr/lib/hebrish (.deb)
+models = "${env:HOME}/.local/share/hebrish/models"
+asr_model = "${models}/sabich"              # a line folder (active version from state.json) or a version folder
+
+[[stages]]
+name = "vad"
+role = "vad"
+adapter = "hebrish.silero"
+threads = 1
+
+[[stages]]
+name = "asr"
+role = "asr"
+adapter = "hebrish.parakeet"
+model = "${asr_model}"
+threads = 4
+provider = "cpu"
+
+[[stages]]
+name = "paragraphs"
+role = "text"
+adapter = "hebrish.paragraphs"
+model = "${models}/paragraph-breaks"
+threads = 0
+
+# A future post-processing pass goes here, after paragraphs, e.g.
+# [[stages]]
+# name = "postprocess"
+# role = "text"
+# adapter = "python"
+# callable = "mypkg.cleanup:run"
+
+[replay]
+chunk_ms = 100

@@ -1,0 +1,16 @@
+name = "fake"
+[vars]
+x = "1"
+[[stages]]
+name = "vad"
+role = "vad"
+adapter = "fake_adapters:Vad"
+[[stages]]
+name = "asr"
+role = "asr"
+adapter = "fake_adapters:Asr"
+threads = "${x}"
+[[stages]]
+name = "upper"
+role = "text"
+adapter = "fake_adapters:Upper"
